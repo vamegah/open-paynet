@@ -1,0 +1,161 @@
+name: OpenPayNet CI/CD
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  repo-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install gateway dependencies
+        run: python scripts/bootstrap_test_env.py
+
+      - name: Smoke import checks
+        run: |
+          python -m py_compile services/auth-service/app/main.py
+          python -m py_compile services/api-gateway/app/main.py
+          python -m py_compile services/ledger-service/app/main.py
+        shell: bash
+
+      - name: Run unit suite
+        run: python scripts/run_tests.py unit
+
+      - name: Validate Kubernetes manifests
+        run: python scripts/validate_k8s_manifests.py
+
+  backlog-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure backlog file exists
+        run: test -f docs/implementation-backlog.md
+
+  integration-testcontainers:
+    needs: [repo-smoke, backlog-guard]
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      TOKEN_ISSUER_ADMIN_KEY: ${{ secrets.TOKEN_ISSUER_ADMIN_KEY }}
+      TOKENIZATION_SECRET: ${{ secrets.TOKENIZATION_SECRET }}
+      MERCHANT_CREDENTIALS_JSON: ${{ secrets.MERCHANT_CREDENTIALS_JSON }}
+      SUBJECT_POLICIES_JSON: ${{ secrets.SUBJECT_POLICIES_JSON }}
+      JWT_ISSUER: ${{ secrets.JWT_ISSUER }}
+      JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE }}
+      GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER }}
+      GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+      ELASTICSEARCH_PASSWORD: ${{ secrets.ELASTICSEARCH_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: python scripts/bootstrap_test_env.py --skip-pip-upgrade
+
+      - name: Run Testcontainers integration smoke
+        run: python scripts/run_tests.py integration --pytest-args tests/integration-tests/test_transaction_flow_testcontainers.py
+
+  deploy-staging:
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    needs: [repo-smoke, backlog-guard, integration-testcontainers]
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    concurrency:
+      group: openpaynet-staging
+      cancel-in-progress: true
+    env:
+      COMPOSE_PROJECT_NAME: openpaynet-staging
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      TOKEN_ISSUER_ADMIN_KEY: ${{ secrets.TOKEN_ISSUER_ADMIN_KEY }}
+      TOKENIZATION_SECRET: ${{ secrets.TOKENIZATION_SECRET }}
+      MERCHANT_CREDENTIALS_JSON: ${{ secrets.MERCHANT_CREDENTIALS_JSON }}
+      SUBJECT_POLICIES_JSON: ${{ secrets.SUBJECT_POLICIES_JSON }}
+      JWT_ISSUER: ${{ secrets.JWT_ISSUER }}
+      JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE }}
+      GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER }}
+      GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+      ELASTICSEARCH_PASSWORD: ${{ secrets.ELASTICSEARCH_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Start staging stack
+        run: docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.staging.yml up --build -d
+
+      - name: Wait for staging readiness
+        run: python scripts/wait_for_staging.py --timeout-seconds 240
+
+      - name: Run API and integration regression suite
+        run: python scripts/run_tests.py all
+
+      - name: Run performance smoke
+        run: |
+          mkdir -p staging-artifacts
+          docker run --rm --network ${COMPOSE_PROJECT_NAME}_default -v "$PWD:/work" -w /work \
+            -e API_GATEWAY_URL=http://api-gateway:8000 \
+            -e AUTH_URL=http://auth-service:8100 \
+            -e TOKEN_ISSUER_ADMIN_KEY=${TOKEN_ISSUER_ADMIN_KEY} \
+            -e K6_SUMMARY_EXPORT=/work/staging-artifacts/k6-summary.json \
+            grafana/k6:0.49.0 run tests/performance-tests/load_test.js
+
+      - name: Validate performance smoke summary
+        run: python scripts/check_k6_summary.py --summary staging-artifacts/k6-summary.json --max-payment-p95-ms 500 --max-failed-rate 0.01
+
+      - name: Run OWASP ZAP API scan
+        run: python scripts/run_zap_api_scan.py --docker-network ${COMPOSE_PROJECT_NAME}_default --openapi-url http://api-gateway:8000/openapi.json --output-dir staging-artifacts
+
+      - name: Validate ZAP report
+        run: python scripts/check_zap_report.py --report staging-artifacts/zap-api-scan.json --fail-on-risk medium --output staging-artifacts/zap-summary.json
+
+      - name: Evaluate release gates
+        run: python scripts/check_release_gate.py --prometheus-url http://localhost:19090 --output staging-artifacts/release-gates.json
+
+      - name: Capture staging deployment metadata
+        if: always()
+        run: |
+          mkdir -p staging-artifacts
+          docker compose -f infra/docker/docker-compose.yml ps > staging-artifacts/compose-ps.txt
+          docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.staging.yml ps > staging-artifacts/compose-ps.txt
+          docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.staging.yml logs --no-color > staging-artifacts/compose-logs.txt
+          python scripts/wait_for_staging.py --timeout-seconds 5 > staging-artifacts/readiness.json || true
+          python scripts/check_release_gate.py --prometheus-url http://localhost:19090 --output staging-artifacts/release-gates.json || true
+
+      - name: Upload staging artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-deployment-artifacts
+          path: staging-artifacts
+
+      - name: Tear down staging stack
+        if: always()
+        run: docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.staging.yml down -v

@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: OpenPayNet
+    orgId: 1
+    folder: OpenPayNet
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: openpaynet-gateway-tls
+  namespace: openpaynet
+spec:
+  secretName: openpaynet-tls
+  dnsNames:
+    - openpaynet.local
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-prod

@@ -1,0 +1,7 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+aiokafka==0.8.0
+kafka-python==2.0.2
+sqlalchemy==2.0.23
+asyncpg==0.29.0
+prometheus-client==0.20.0

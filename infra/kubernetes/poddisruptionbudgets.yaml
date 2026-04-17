@@ -1,0 +1,76 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-gateway-pdb
+  namespace: openpaynet
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: auth-service-pdb
+  namespace: openpaynet
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: auth-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: payment-service-pdb
+  namespace: openpaynet
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: payment-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: fraud-service-pdb
+  namespace: openpaynet
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: fraud-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ledger-service-pdb
+  namespace: openpaynet
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ledger-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: notification-service-pdb
+  namespace: openpaynet
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: notification-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: audit-service-pdb
+  namespace: openpaynet
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: audit-service

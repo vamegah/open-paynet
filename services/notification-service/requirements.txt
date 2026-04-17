@@ -1,0 +1,5 @@
+aiokafka==0.8.0
+kafka-python==2.0.2
+fastapi==0.110.0
+uvicorn==0.29.0
+redis==5.0.3

@@ -1,0 +1,52 @@
+groups:
+  - name: openpaynet-alerts
+    rules:
+      - alert: OpenPayNetGatewayHigh5xxRate
+        expr: |
+          (
+            sum(rate(openpaynet_gateway_requests_total{status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(openpaynet_gateway_requests_total[5m])), 0.001)
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gateway 5xx rate above 5%"
+          description: "The API gateway is returning more than 5% 5xx responses over 5 minutes."
+
+      - alert: OpenPayNetGatewayPublishFailures
+        expr: increase(openpaynet_gateway_payment_events_failed_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gateway payment event publish failures detected"
+          description: "Kafka publish failures were observed in the API gateway over the last 10 minutes."
+
+      - alert: OpenPayNetGatewayCircuitBreakerOpen
+        expr: increase(openpaynet_gateway_payment_circuit_breaker_rejections_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Gateway circuit breaker is rejecting payment requests"
+          description: "The API gateway circuit breaker has opened and is rejecting payment publish attempts."
+
+      - alert: OpenPayNetLedgerConsumerErrors
+        expr: increase(openpaynet_ledger_consumer_errors_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ledger consumer errors detected"
+          description: "The ledger consumer has reported processing errors in the last 10 minutes."
+
+      - alert: OpenPayNetLedgerDlqActivity
+        expr: increase(openpaynet_ledger_dlq_publishes_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Ledger DLQ activity detected"
+          description: "Ledger events have been sent to the dead-letter queue in the last 10 minutes."

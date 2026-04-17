@@ -1,0 +1,431 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: openpaynet
+spec:
+  selector:
+    app: kafka
+  ports:
+    - name: broker
+      port: 9092
+      targetPort: 9092
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-headless
+  namespace: openpaynet
+spec:
+  clusterIP: None
+  selector:
+    app: kafka
+  ports:
+    - name: broker
+      port: 9092
+      targetPort: 9092
+    - name: controller
+      port: 9093
+      targetPort: 9093
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: openpaynet
+spec:
+  serviceName: kafka-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: kafka
+          image: bitnami/kafka:3.7
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              export POD_ORDINAL="${HOSTNAME##*-}"
+              export KAFKA_CFG_NODE_ID="$((POD_ORDINAL + 1))"
+              export KAFKA_CFG_ADVERTISED_LISTENERS="PLAINTEXT://${HOSTNAME}.kafka-headless.openpaynet.svc.cluster.local:9092"
+              exec /opt/bitnami/scripts/kafka/run.sh
+          env:
+            - name: KAFKA_ENABLE_KRAFT
+              value: "yes"
+            - name: KAFKA_KRAFT_CLUSTER_ID
+              value: openpaynet-kraft-cluster-001
+            - name: KAFKA_CFG_PROCESS_ROLES
+              value: broker,controller
+            - name: KAFKA_CFG_CONTROLLER_LISTENER_NAMES
+              value: CONTROLLER
+            - name: KAFKA_CFG_LISTENERS
+              value: PLAINTEXT://:9092,CONTROLLER://:9093
+            - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
+              value: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+            - name: KAFKA_CFG_INTER_BROKER_LISTENER_NAME
+              value: PLAINTEXT
+            - name: KAFKA_CFG_CONTROLLER_QUORUM_VOTERS
+              value: 1@kafka-0.kafka-headless.openpaynet.svc.cluster.local:9093,2@kafka-1.kafka-headless.openpaynet.svc.cluster.local:9093,3@kafka-2.kafka-headless.openpaynet.svc.cluster.local:9093
+            - name: KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "2"
+            - name: KAFKA_CFG_MIN_INSYNC_REPLICAS
+              value: "2"
+            - name: KAFKA_CFG_DEFAULT_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_CFG_NUM_PARTITIONS
+              value: "3"
+            - name: ALLOW_PLAINTEXT_LISTENER
+              value: "yes"
+          ports:
+            - containerPort: 9092
+            - containerPort: 9093
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /bitnami/kafka
+          readinessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2
+              memory: 2Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topic-init
+  namespace: openpaynet
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: kafka-topic-init
+          image: bitnami/kafka:3.7
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -ec
+            - >
+              /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic payment-initiated --partitions 3 --replication-factor 3 &&
+              /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic payment-processed --partitions 3 --replication-factor 3 &&
+              /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic fraud-evaluated --partitions 3 --replication-factor 3 &&
+              /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic payment-processed-dlq --partitions 3 --replication-factor 3 &&
+              /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic fraud-evaluated-dlq --partitions 3 --replication-factor 3 &&
+              /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ledger-recording-dlq --partitions 3 --replication-factor 3 &&
+              /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic notification-dlq --partitions 3 --replication-factor 3 &&
+              /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic audit-dlq --partitions 3 --replication-factor 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: openpaynet
+spec:
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-headless
+  namespace: openpaynet
+spec:
+  clusterIP: None
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: openpaynet
+spec:
+  serviceName: redis-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          args: ["--appendonly", "yes"]
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ledger-db
+  namespace: openpaynet
+spec:
+  selector:
+    app: ledger-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ledger-db-headless
+  namespace: openpaynet
+spec:
+  clusterIP: None
+  selector:
+    app: ledger-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ledger-db
+  namespace: openpaynet
+spec:
+  serviceName: ledger-db-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ledger-db
+  template:
+    metadata:
+      labels:
+        app: ledger-db
+    spec:
+      containers:
+        - name: ledger-db
+          image: postgres:15-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: openpaynet-app-secrets
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: openpaynet-app-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openpaynet-app-secrets
+                  key: POSTGRES_PASSWORD
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  namespace: openpaynet
+spec:
+  selector:
+    app: elasticsearch
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-headless
+  namespace: openpaynet
+spec:
+  clusterIP: None
+  selector:
+    app: elasticsearch
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200
+    - name: transport
+      port: 9300
+      targetPort: 9300
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  namespace: openpaynet
+spec:
+  serviceName: elasticsearch-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: cluster.name
+              value: openpaynet-es
+            - name: node.name
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: discovery.seed_hosts
+              value: elasticsearch-0.elasticsearch-headless.openpaynet.svc.cluster.local,elasticsearch-1.elasticsearch-headless.openpaynet.svc.cluster.local,elasticsearch-2.elasticsearch-headless.openpaynet.svc.cluster.local
+            - name: cluster.initial_master_nodes
+              value: elasticsearch-0,elasticsearch-1,elasticsearch-2
+            - name: xpack.security.enabled
+              value: "true"
+            - name: ELASTIC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openpaynet-app-secrets
+                  key: ELASTICSEARCH_PASSWORD
+            - name: ES_JAVA_OPTS
+              value: -Xms1g -Xmx1g
+          ports:
+            - containerPort: 9200
+            - containerPort: 9300
+          volumeMounts:
+            - name: elasticsearch-data
+              mountPath: /usr/share/elasticsearch/data
+          readinessProbe:
+            tcpSocket:
+              port: 9200
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9200
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: 2
+              memory: 2Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: elasticsearch-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi

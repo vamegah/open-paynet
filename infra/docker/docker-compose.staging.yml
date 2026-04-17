@@ -1,0 +1,13 @@
+services:
+  elasticsearch:
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "true"
+      ELASTIC_PASSWORD: ${ELASTICSEARCH_PASSWORD:?Set ELASTICSEARCH_PASSWORD in staging secrets}
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+
+  audit-service:
+    environment:
+      ELASTICSEARCH_HOST: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:?Set ELASTICSEARCH_PASSWORD in staging secrets}
