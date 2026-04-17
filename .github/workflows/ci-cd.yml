@@ -47,19 +47,19 @@ jobs:
     needs: [repo-smoke, backlog-guard]
     runs-on: ubuntu-latest
     env:
-      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-      JWT_SECRET: ${{ secrets.JWT_SECRET }}
-      TOKEN_ISSUER_ADMIN_KEY: ${{ secrets.TOKEN_ISSUER_ADMIN_KEY }}
-      TOKENIZATION_SECRET: ${{ secrets.TOKENIZATION_SECRET }}
-      MERCHANT_CREDENTIALS_JSON: ${{ secrets.MERCHANT_CREDENTIALS_JSON }}
-      SUBJECT_POLICIES_JSON: ${{ secrets.SUBJECT_POLICIES_JSON }}
-      JWT_ISSUER: ${{ secrets.JWT_ISSUER }}
-      JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE }}
-      GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER }}
-      GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
-      ELASTICSEARCH_PASSWORD: ${{ secrets.ELASTICSEARCH_PASSWORD }}
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB || 'ledger' }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER || 'postgres' }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'replace-me' }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET || 'replace-me' }}
+      TOKEN_ISSUER_ADMIN_KEY: ${{ secrets.TOKEN_ISSUER_ADMIN_KEY || 'issuer-admin-key' }}
+      TOKENIZATION_SECRET: ${{ secrets.TOKENIZATION_SECRET || 'replace-me' }}
+      MERCHANT_CREDENTIALS_JSON: ${{ secrets.MERCHANT_CREDENTIALS_JSON || '{"merchant-demo":{"api_key":"demo-key","role":"merchant","scopes":["payments:write","ledger:read"]}}' }}
+      SUBJECT_POLICIES_JSON: ${{ secrets.SUBJECT_POLICIES_JSON || '{"*":{"role":"payment_initiator","scopes":["payments:write","ledger:read"],"allowed_roles":["payment_initiator"]}}' }}
+      JWT_ISSUER: ${{ secrets.JWT_ISSUER || 'openpaynet-auth' }}
+      JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE || 'openpaynet-api' }}
+      GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER || 'admin' }}
+      GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD || 'replace-me' }}
+      ELASTICSEARCH_PASSWORD: ${{ secrets.ELASTICSEARCH_PASSWORD || 'replace-me' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -73,7 +73,7 @@ jobs:
         run: python scripts/bootstrap_test_env.py --skip-pip-upgrade
 
       - name: Run Testcontainers integration smoke
-        run: python scripts/run_tests.py integration --pytest-args tests/integration-tests/test_transaction_flow_testcontainers.py
+        run: python -m pytest tests/integration-tests/test_transaction_flow_testcontainers.py -v
 
   deploy-staging:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
@@ -86,19 +86,19 @@ jobs:
       cancel-in-progress: true
     env:
       COMPOSE_PROJECT_NAME: openpaynet-staging
-      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-      JWT_SECRET: ${{ secrets.JWT_SECRET }}
-      TOKEN_ISSUER_ADMIN_KEY: ${{ secrets.TOKEN_ISSUER_ADMIN_KEY }}
-      TOKENIZATION_SECRET: ${{ secrets.TOKENIZATION_SECRET }}
-      MERCHANT_CREDENTIALS_JSON: ${{ secrets.MERCHANT_CREDENTIALS_JSON }}
-      SUBJECT_POLICIES_JSON: ${{ secrets.SUBJECT_POLICIES_JSON }}
-      JWT_ISSUER: ${{ secrets.JWT_ISSUER }}
-      JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE }}
-      GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER }}
-      GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
-      ELASTICSEARCH_PASSWORD: ${{ secrets.ELASTICSEARCH_PASSWORD }}
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB || 'ledger' }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER || 'postgres' }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'replace-me' }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET || 'replace-me' }}
+      TOKEN_ISSUER_ADMIN_KEY: ${{ secrets.TOKEN_ISSUER_ADMIN_KEY || 'issuer-admin-key' }}
+      TOKENIZATION_SECRET: ${{ secrets.TOKENIZATION_SECRET || 'replace-me' }}
+      MERCHANT_CREDENTIALS_JSON: ${{ secrets.MERCHANT_CREDENTIALS_JSON || '{"merchant-demo":{"api_key":"demo-key","role":"merchant","scopes":["payments:write","ledger:read"]}}' }}
+      SUBJECT_POLICIES_JSON: ${{ secrets.SUBJECT_POLICIES_JSON || '{"*":{"role":"payment_initiator","scopes":["payments:write","ledger:read"],"allowed_roles":["payment_initiator"]}}' }}
+      JWT_ISSUER: ${{ secrets.JWT_ISSUER || 'openpaynet-auth' }}
+      JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE || 'openpaynet-api' }}
+      GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER || 'admin' }}
+      GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD || 'replace-me' }}
+      ELASTICSEARCH_PASSWORD: ${{ secrets.ELASTICSEARCH_PASSWORD || 'replace-me' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

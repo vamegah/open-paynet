@@ -4,7 +4,7 @@ import { check, sleep } from 'k6';
 const API_GATEWAY_URL = __ENV.API_GATEWAY_URL || 'http://localhost:18000';
 const AUTH_URL = __ENV.AUTH_URL || 'http://localhost:18100';
 const TEST_PROFILE = __ENV.K6_PROFILE || 'smoke';
-const TOKEN_ISSUER_ADMIN_KEY = __ENV.TOKEN_ISSUER_ADMIN_KEY || 'issuer-admin-key';
+const TOKEN_ISSUER_ADMIN_KEY = (__ENV.TOKEN_ISSUER_ADMIN_KEY || '').trim() || 'issuer-admin-key';
 
 const profiles = {
   smoke: {

@@ -13,7 +13,7 @@ DockerCompose = testcontainers.DockerCompose
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 COMPOSE_DIR = REPO_ROOT / "infra" / "docker"
 COMPOSE_FILE_NAME = "docker-compose.integration.yml"
-TOKEN_ISSUER_ADMIN_KEY = os.getenv("TOKEN_ISSUER_ADMIN_KEY", "issuer-admin-key")
+TOKEN_ISSUER_ADMIN_KEY = os.getenv("TOKEN_ISSUER_ADMIN_KEY") or "issuer-admin-key"
 
 
 def docker_accessible() -> tuple[bool, str]:

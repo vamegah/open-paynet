@@ -7,7 +7,7 @@ import uuid
 API_GATEWAY_URL = "http://localhost:18000"
 AUTH_URL = "http://localhost:18100"
 LEDGER_URL = "http://localhost:18200"
-TOKEN_ISSUER_ADMIN_KEY = os.getenv("TOKEN_ISSUER_ADMIN_KEY", "issuer-admin-key")
+TOKEN_ISSUER_ADMIN_KEY = os.getenv("TOKEN_ISSUER_ADMIN_KEY") or "issuer-admin-key"
 
 
 def issue_token(subject: str = "api-test-user", requested_scopes: list[str] | None = None) -> dict[str, str]:

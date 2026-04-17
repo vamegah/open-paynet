@@ -11,7 +11,7 @@ CONTRACT_PATH = BASE_DIR / "contracts" / "payment-ledger-contract.json"
 API_GATEWAY_URL = "http://localhost:18000"
 LEDGER_URL = "http://localhost:18200"
 AUTH_URL = "http://localhost:18100"
-TOKEN_ISSUER_ADMIN_KEY = os.getenv("TOKEN_ISSUER_ADMIN_KEY", "issuer-admin-key")
+TOKEN_ISSUER_ADMIN_KEY = os.getenv("TOKEN_ISSUER_ADMIN_KEY") or "issuer-admin-key"
 
 
 def load_contract() -> dict:

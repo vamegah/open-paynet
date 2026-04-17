@@ -7,7 +7,7 @@ API_GATEWAY_URL = "http://localhost:18000"
 LEDGER_URL = "http://localhost:18200"
 AUTH_URL = "http://localhost:18100"
 NOTIFICATION_URL = "http://localhost:18300"
-TOKEN_ISSUER_ADMIN_KEY = os.getenv("TOKEN_ISSUER_ADMIN_KEY", "issuer-admin-key")
+TOKEN_ISSUER_ADMIN_KEY = os.getenv("TOKEN_ISSUER_ADMIN_KEY") or "issuer-admin-key"
 
 
 def wait_for_ledger_state(txn_id: str, timeout_seconds: int = 20):

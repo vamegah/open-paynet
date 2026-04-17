@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 
 AUTH_URL = "http://localhost:18100/v1/token"
 PAYMENT_URL = "http://localhost:18000/v1/payments"
-TOKEN_ISSUER_ADMIN_KEY = os.getenv("TOKEN_ISSUER_ADMIN_KEY", "issuer-admin-key")
+TOKEN_ISSUER_ADMIN_KEY = os.getenv("TOKEN_ISSUER_ADMIN_KEY") or "issuer-admin-key"
 
 
 def post_json(url: str, payload: dict, headers: dict[str, str] | None = None) -> dict:
