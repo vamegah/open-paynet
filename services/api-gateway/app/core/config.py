@@ -1,4 +1,4 @@
-from shared.config import env_float, env_int, env_text, load_json_config, load_secret, parse_api_keys
+from shared.config import env_float, env_int, env_text, load_json_config, load_secret, parse_api_keys, parse_scopes
 
 
 class Settings:
