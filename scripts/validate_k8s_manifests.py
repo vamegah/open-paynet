@@ -12,6 +12,13 @@ except ModuleNotFoundError:
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST_DIR = REPO_ROOT / "infra" / "kubernetes"
+EXPECTED_OFFLINE_KUBECTL_ERRORS = (
+    "connect: connection refused",
+    "no configuration has been provided",
+    "current-context is not set",
+    "the connection to the server localhost:8080 was refused",
+    "dial tcp",
+)
 
 
 def load_documents(manifest_dir: Path) -> list[tuple[Path, dict]]:
@@ -87,7 +94,67 @@ def validate_manifest_policies(documents: list[tuple[Path, dict]]) -> list[str]:
     return errors
 
 
+def kubectl_available() -> bool:
+    completed = subprocess.run(
+        ["kubectl", "version", "--client=true"],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return completed.returncode == 0
+
+
+def kubectl_cluster_reachable() -> bool:
+    completed = subprocess.run(
+        ["kubectl", "cluster-info", "--request-timeout=5s"],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode == 0:
+        return True
+
+    output = f"{completed.stdout}\n{completed.stderr}".lower()
+    if any(fragment in output for fragment in EXPECTED_OFFLINE_KUBECTL_ERRORS):
+        print("kubectl cluster not reachable; skipping cluster-backed client dry-run checks")
+        return False
+
+    print(output.strip())
+    return False
+
+
+def kubectl_kustomize_check(manifest_dir: Path) -> list[str]:
+    kustomization = manifest_dir / "kustomization.yaml"
+    if not kustomization.exists():
+        return []
+
+    completed = subprocess.run(
+        ["kubectl", "kustomize", str(manifest_dir)],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        stderr = (completed.stderr or completed.stdout).strip()
+        return [f"kustomize render failed: {stderr}"]
+    return []
+
+
 def kubectl_client_check(manifest_dir: Path) -> list[str]:
+    if not kubectl_available():
+        print("kubectl is not installed; skipping kubectl-based manifest rendering checks")
+        return []
+
+    errors = kubectl_kustomize_check(manifest_dir)
+    if errors:
+        return errors
+
+    if not kubectl_cluster_reachable():
+        return []
+
     errors: list[str] = []
     for path in sorted(manifest_dir.glob("*.yaml")):
         if path.name in {"kustomization.yaml", "secret.example.yaml"}:
