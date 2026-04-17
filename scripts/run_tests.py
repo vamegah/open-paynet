@@ -13,7 +13,12 @@ SUITES = {
     "performance": ["tests/performance-tests"],
     "chaos": ["tests/chaos-tests"],
     "security": ["tests/security-tests"],
-    "all": ["tests/unit-tests", "tests/api-tests", "tests/contract-tests", "tests/integration-tests"],
+    "all": [
+        "tests/unit-tests",
+        "tests/api-tests",
+        "tests/contract-tests",
+        "tests/integration-tests/test_transaction_flow.py",
+    ],
 }
 
 

@@ -12,6 +12,7 @@ DockerCompose = testcontainers.DockerCompose
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 COMPOSE_DIR = REPO_ROOT / "infra" / "docker"
+COMPOSE_FILE_NAME = "docker-compose.integration.yml"
 TOKEN_ISSUER_ADMIN_KEY = os.getenv("TOKEN_ISSUER_ADMIN_KEY", "issuer-admin-key")
 
 
@@ -65,7 +66,7 @@ def test_transaction_flow_with_testcontainers():
     if not accessible:
         pytest.skip(f"Docker access unavailable for Testcontainers: {reason}")
 
-    with DockerCompose(str(COMPOSE_DIR), compose_file_name="docker-compose.yml") as compose:
+    with DockerCompose(str(COMPOSE_DIR), compose_file_name=COMPOSE_FILE_NAME) as compose:
         gateway_port = compose.get_service_port("api-gateway", 8000)
         auth_port = compose.get_service_port("auth-service", 8100)
         ledger_port = compose.get_service_port("ledger-service", 8200)

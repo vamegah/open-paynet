@@ -1,0 +1,148 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on: [zookeeper]
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 18
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  ledger-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB for integration compose}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER for integration compose}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for integration compose}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ledger"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["/bin/bash", "-c"]
+    command: >
+      "
+      set -euo pipefail;
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic payment-initiated --partitions 1 --replication-factor 1;
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic payment-processed --partitions 1 --replication-factor 1;
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic fraud-evaluated --partitions 1 --replication-factor 1;
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic payment-processed-dlq --partitions 1 --replication-factor 1;
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic fraud-evaluated-dlq --partitions 1 --replication-factor 1;
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic ledger-recording-dlq --partitions 1 --replication-factor 1;
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic notification-dlq --partitions 1 --replication-factor 1;
+      "
+
+  auth-service:
+    build:
+      context: ../../
+      dockerfile: services/auth-service/Dockerfile
+    ports: ["18100:8100"]
+    environment:
+      ALLOW_INSECURE_DEFAULT_SECRETS: "false"
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET for integration compose}
+      TOKEN_ISSUER_ADMIN_KEY: ${TOKEN_ISSUER_ADMIN_KEY:?Set TOKEN_ISSUER_ADMIN_KEY for integration compose}
+      JWT_ISSUER: ${JWT_ISSUER:-openpaynet-auth}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-openpaynet-api}
+      DEFAULT_SUBJECT_ROLE: payment_initiator
+      DEFAULT_SUBJECT_SCOPES: payments:write ledger:read
+      MERCHANT_CREDENTIALS_JSON: ${MERCHANT_CREDENTIALS_JSON:?Set MERCHANT_CREDENTIALS_JSON for integration compose}
+      SUBJECT_POLICIES_JSON: ${SUBJECT_POLICIES_JSON:?Set SUBJECT_POLICIES_JSON for integration compose}
+
+  api-gateway:
+    build:
+      context: ../../
+      dockerfile: services/api-gateway/Dockerfile
+    ports: ["18000:8000"]
+    environment:
+      ALLOW_INSECURE_DEFAULT_SECRETS: "false"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET for integration compose}
+      JWT_ISSUER: ${JWT_ISSUER:-openpaynet-auth}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-openpaynet-api}
+      TOKENIZATION_SECRET: ${TOKENIZATION_SECRET:?Set TOKENIZATION_SECRET for integration compose}
+      MERCHANT_CREDENTIALS_JSON: ${MERCHANT_CREDENTIALS_JSON:?Set MERCHANT_CREDENTIALS_JSON for integration compose}
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  payment-service:
+    build:
+      context: ../../
+      dockerfile: services/payment-service/Dockerfile
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+
+  fraud-service:
+    build:
+      context: ../../
+      dockerfile: services/fraud-service/Dockerfile
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  ledger-service:
+    build:
+      context: ../../
+      dockerfile: services/ledger-service/Dockerfile
+    ports: ["18200:8200"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?Set POSTGRES_USER for integration compose}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for integration compose}@ledger-db:5432/${POSTGRES_DB:?Set POSTGRES_DB for integration compose}
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      ledger-db:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: ../../
+      dockerfile: services/notification-service/Dockerfile
+    ports: ["18300:8300"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
