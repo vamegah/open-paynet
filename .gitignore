@@ -16,6 +16,7 @@ k6-summary.json
 zap-wip.html
 zap-wip.json
 zap-wip.md
+infra/docker/backups/*.sql
 
 .venv/
 venv/
