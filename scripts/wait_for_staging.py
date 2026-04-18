@@ -24,6 +24,8 @@ def check_url(url: str) -> tuple[bool, int | None, str]:
         return False, exc.code, exc.reason
     except URLError as exc:
         return False, None, str(exc.reason)
+    except OSError as exc:
+        return False, None, str(exc)
 
 
 def main() -> int:
