@@ -1,6 +1,7 @@
 import argparse
 import json
 import sys
+from pathlib import Path
 
 
 def read_metric(summary: dict, name: str) -> dict:
@@ -23,8 +24,12 @@ def main() -> int:
     parser.add_argument("--max-failed-rate", type=float, default=0.01)
     args = parser.parse_args()
 
-    with open(args.summary, "r", encoding="utf-8") as handle:
-      summary = json.load(handle)
+    summary_path = Path(args.summary)
+    if not summary_path.exists():
+        raise FileNotFoundError(f"k6 summary file not found: {summary_path}")
+
+    with summary_path.open("r", encoding="utf-8") as handle:
+        summary = json.load(handle)
 
     payment_duration = read_metric(summary, "http_req_duration{endpoint:payments}")
     payment_failures = read_metric(summary, "http_req_failed{endpoint:payments}")
