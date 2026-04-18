@@ -108,6 +108,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install test dependencies
+        run: python scripts/bootstrap_test_env.py --skip-pip-upgrade
+
       - name: Start staging stack
         run: docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.staging.yml up --build -d
 
