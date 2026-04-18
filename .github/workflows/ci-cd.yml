@@ -122,13 +122,15 @@ jobs:
 
       - name: Run performance smoke
         run: |
+          set -o pipefail
           mkdir -p staging-artifacts
           docker run --rm --network ${COMPOSE_PROJECT_NAME}_default -v "$PWD:/work" -w /work \
             -e API_GATEWAY_URL=http://api-gateway:8000 \
             -e AUTH_URL=http://auth-service:8100 \
             -e TOKEN_ISSUER_ADMIN_KEY=${TOKEN_ISSUER_ADMIN_KEY} \
             -e K6_SUMMARY_PATH=/work/staging-artifacts/k6-summary.json \
-            grafana/k6:0.49.0 run tests/performance-tests/load_test.js
+            grafana/k6:0.49.0 run --quiet tests/performance-tests/load_test.js | tee staging-artifacts/k6-summary.stdout
+          python scripts/materialize_k6_summary.py --summary staging-artifacts/k6-summary.json --stdout-log staging-artifacts/k6-summary.stdout
           ls -l staging-artifacts
 
       - name: Validate performance smoke summary
