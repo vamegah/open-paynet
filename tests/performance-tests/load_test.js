@@ -5,6 +5,7 @@ const API_GATEWAY_URL = __ENV.API_GATEWAY_URL || 'http://localhost:18000';
 const AUTH_URL = __ENV.AUTH_URL || 'http://localhost:18100';
 const TEST_PROFILE = __ENV.K6_PROFILE || 'smoke';
 const TOKEN_ISSUER_ADMIN_KEY = (__ENV.TOKEN_ISSUER_ADMIN_KEY || '').trim() || 'issuer-admin-key';
+const K6_SUMMARY_PATH = (__ENV.K6_SUMMARY_PATH || '').trim();
 
 const profiles = {
   smoke: {
@@ -31,6 +32,19 @@ export const options = {
   },
   summaryTrendStats: ['avg', 'min', 'med', 'p(95)', 'p(99)', 'max'],
 };
+
+export function handleSummary(data) {
+  const summary = JSON.stringify(data, null, 2);
+
+  if (K6_SUMMARY_PATH) {
+    return {
+      [K6_SUMMARY_PATH]: summary,
+      stdout: summary,
+    };
+  }
+
+  return { stdout: summary };
+}
 
 function issueToken(subject) {
   const response = http.post(

@@ -127,7 +127,9 @@ jobs:
             -e API_GATEWAY_URL=http://api-gateway:8000 \
             -e AUTH_URL=http://auth-service:8100 \
             -e TOKEN_ISSUER_ADMIN_KEY=${TOKEN_ISSUER_ADMIN_KEY} \
-            grafana/k6:0.49.0 run --summary-export /work/staging-artifacts/k6-summary.json tests/performance-tests/load_test.js
+            -e K6_SUMMARY_PATH=/work/staging-artifacts/k6-summary.json \
+            grafana/k6:0.49.0 run tests/performance-tests/load_test.js
+          ls -l staging-artifacts
 
       - name: Validate performance smoke summary
         run: python scripts/check_k6_summary.py --summary staging-artifacts/k6-summary.json --max-payment-p95-ms 500 --max-failed-rate 0.01
