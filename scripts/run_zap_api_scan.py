@@ -1,6 +1,7 @@
 import argparse
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 
@@ -24,7 +25,8 @@ def main() -> int:
     json_name = f"{args.format_prefix}.json"
     html_name = f"{args.format_prefix}.html"
     md_name = f"{args.format_prefix}.md"
-    relative_output_dir = output_dir.relative_to(REPO_ROOT).as_posix()
+    container_output_dir = "/tmp/openpaynet-zap"
+    container_name = f"openpaynet-zap-{uuid.uuid4().hex[:12]}"
 
     replacer = (
         "-config replacer.full_list(0).description=api-key "
@@ -37,11 +39,10 @@ def main() -> int:
     command = [
         "docker",
         "run",
-        "--rm",
+        "--name",
+        container_name,
         "--network",
         args.docker_network,
-        "-v",
-        f"{REPO_ROOT}:/zap/wrk",
         args.image,
         "zap-api-scan.py",
         "-t",
@@ -49,18 +50,32 @@ def main() -> int:
         "-f",
         "openapi",
         "-J",
-        f"/zap/wrk/{relative_output_dir}/{json_name}",
+        f"{container_output_dir}/{json_name}",
         "-r",
-        f"/zap/wrk/{relative_output_dir}/{html_name}",
+        f"{container_output_dir}/{html_name}",
         "-w",
-        f"/zap/wrk/{relative_output_dir}/{md_name}",
+        f"{container_output_dir}/{md_name}",
         "-z",
         replacer,
         "-I",
     ]
 
-    completed = subprocess.run(command, cwd=REPO_ROOT)
-    return completed.returncode
+    try:
+        completed = subprocess.run(command, cwd=REPO_ROOT)
+        for artifact_name in (json_name, html_name, md_name):
+            subprocess.run(
+                [
+                    "docker",
+                    "cp",
+                    f"{container_name}:{container_output_dir}/{artifact_name}",
+                    str(output_dir / artifact_name),
+                ],
+                cwd=REPO_ROOT,
+                check=False,
+            )
+        return completed.returncode
+    finally:
+        subprocess.run(["docker", "rm", "-f", container_name], cwd=REPO_ROOT, check=False)
 
 
 if __name__ == "__main__":
