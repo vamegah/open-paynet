@@ -1,7 +1,6 @@
 import argparse
 import subprocess
 import sys
-import uuid
 from pathlib import Path
 
 
@@ -25,8 +24,7 @@ def main() -> int:
     json_name = f"{args.format_prefix}.json"
     html_name = f"{args.format_prefix}.html"
     md_name = f"{args.format_prefix}.md"
-    container_output_dir = "/tmp/openpaynet-zap"
-    container_name = f"openpaynet-zap-{uuid.uuid4().hex[:12]}"
+    container_output_dir = "/zap/wrk"
 
     replacer = (
         "-config replacer.full_list(0).description=api-key "
@@ -39,10 +37,13 @@ def main() -> int:
     command = [
         "docker",
         "run",
-        "--name",
-        container_name,
+        "--rm",
+        "--user",
+        "0:0",
         "--network",
         args.docker_network,
+        "-v",
+        f"{output_dir}:/zap/wrk",
         args.image,
         "zap-api-scan.py",
         "-t",
@@ -60,22 +61,8 @@ def main() -> int:
         "-I",
     ]
 
-    try:
-        completed = subprocess.run(command, cwd=REPO_ROOT)
-        for artifact_name in (json_name, html_name, md_name):
-            subprocess.run(
-                [
-                    "docker",
-                    "cp",
-                    f"{container_name}:{container_output_dir}/{artifact_name}",
-                    str(output_dir / artifact_name),
-                ],
-                cwd=REPO_ROOT,
-                check=False,
-            )
-        return completed.returncode
-    finally:
-        subprocess.run(["docker", "rm", "-f", container_name], cwd=REPO_ROOT, check=False)
+    completed = subprocess.run(command, cwd=REPO_ROOT)
+    return completed.returncode
 
 
 if __name__ == "__main__":
