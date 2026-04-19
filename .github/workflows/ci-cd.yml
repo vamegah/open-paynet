@@ -8,6 +8,23 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  POSTGRES_DB: ${{ secrets.POSTGRES_DB || 'ledger' }}
+  POSTGRES_USER: ${{ secrets.POSTGRES_USER || 'postgres' }}
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'replace-me' }}
+  JWT_SECRET: ${{ secrets.JWT_SECRET || 'replace-me' }}
+  TOKEN_ISSUER_ADMIN_KEY: ${{ secrets.TOKEN_ISSUER_ADMIN_KEY || 'issuer-admin-key' }}
+  TOKENIZATION_SECRET: ${{ secrets.TOKENIZATION_SECRET || 'replace-me' }}
+  MERCHANT_CREDENTIALS_JSON: ${{ secrets.MERCHANT_CREDENTIALS_JSON || '{"merchant-demo":{"api_key":"demo-key","role":"merchant","scopes":["payments:write","ledger:read"]}}' }}
+  SUBJECT_POLICIES_JSON: ${{ secrets.SUBJECT_POLICIES_JSON || '{"*":{"role":"payment_initiator","scopes":["payments:write","ledger:read"],"allowed_roles":["payment_initiator"]}}' }}
+  JWT_ISSUER: ${{ secrets.JWT_ISSUER || 'openpaynet-auth' }}
+  JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE || 'openpaynet-api' }}
+  GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER || 'admin' }}
+  GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD || 'replace-me' }}
+  ELASTICSEARCH_PASSWORD: ${{ secrets.ELASTICSEARCH_PASSWORD || 'replace-me' }}
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   repo-smoke:
@@ -29,7 +46,6 @@ jobs:
           python -m py_compile services/auth-service/app/main.py
           python -m py_compile services/api-gateway/app/main.py
           python -m py_compile services/ledger-service/app/main.py
-        shell: bash
 
       - name: Run unit suite
         run: python scripts/run_tests.py unit
@@ -49,20 +65,6 @@ jobs:
   integration-testcontainers:
     needs: [repo-smoke, backlog-guard]
     runs-on: ubuntu-latest
-    env:
-      POSTGRES_DB: ${{ secrets.POSTGRES_DB || 'ledger' }}
-      POSTGRES_USER: ${{ secrets.POSTGRES_USER || 'postgres' }}
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'replace-me' }}
-      JWT_SECRET: ${{ secrets.JWT_SECRET || 'replace-me' }}
-      TOKEN_ISSUER_ADMIN_KEY: ${{ secrets.TOKEN_ISSUER_ADMIN_KEY || 'issuer-admin-key' }}
-      TOKENIZATION_SECRET: ${{ secrets.TOKENIZATION_SECRET || 'replace-me' }}
-      MERCHANT_CREDENTIALS_JSON: ${{ secrets.MERCHANT_CREDENTIALS_JSON || '{"merchant-demo":{"api_key":"demo-key","role":"merchant","scopes":["payments:write","ledger:read"]}}' }}
-      SUBJECT_POLICIES_JSON: ${{ secrets.SUBJECT_POLICIES_JSON || '{"*":{"role":"payment_initiator","scopes":["payments:write","ledger:read"],"allowed_roles":["payment_initiator"]}}' }}
-      JWT_ISSUER: ${{ secrets.JWT_ISSUER || 'openpaynet-auth' }}
-      JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE || 'openpaynet-api' }}
-      GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER || 'admin' }}
-      GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD || 'replace-me' }}
-      ELASTICSEARCH_PASSWORD: ${{ secrets.ELASTICSEARCH_PASSWORD || 'replace-me' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -89,19 +91,6 @@ jobs:
       cancel-in-progress: true
     env:
       COMPOSE_PROJECT_NAME: openpaynet-staging
-      POSTGRES_DB: ${{ secrets.POSTGRES_DB || 'ledger' }}
-      POSTGRES_USER: ${{ secrets.POSTGRES_USER || 'postgres' }}
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'replace-me' }}
-      JWT_SECRET: ${{ secrets.JWT_SECRET || 'replace-me' }}
-      TOKEN_ISSUER_ADMIN_KEY: ${{ secrets.TOKEN_ISSUER_ADMIN_KEY || 'issuer-admin-key' }}
-      TOKENIZATION_SECRET: ${{ secrets.TOKENIZATION_SECRET || 'replace-me' }}
-      MERCHANT_CREDENTIALS_JSON: ${{ secrets.MERCHANT_CREDENTIALS_JSON || '{"merchant-demo":{"api_key":"demo-key","role":"merchant","scopes":["payments:write","ledger:read"]}}' }}
-      SUBJECT_POLICIES_JSON: ${{ secrets.SUBJECT_POLICIES_JSON || '{"*":{"role":"payment_initiator","scopes":["payments:write","ledger:read"],"allowed_roles":["payment_initiator"]}}' }}
-      JWT_ISSUER: ${{ secrets.JWT_ISSUER || 'openpaynet-auth' }}
-      JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE || 'openpaynet-api' }}
-      GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER || 'admin' }}
-      GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD || 'replace-me' }}
-      ELASTICSEARCH_PASSWORD: ${{ secrets.ELASTICSEARCH_PASSWORD || 'replace-me' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -152,7 +141,6 @@ jobs:
         if: always()
         run: |
           mkdir -p staging-artifacts
-          docker compose -f infra/docker/docker-compose.yml ps > staging-artifacts/compose-ps.txt
           docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.staging.yml ps > staging-artifacts/compose-ps.txt
           docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.staging.yml logs --no-color > staging-artifacts/compose-logs.txt
           python scripts/wait_for_staging.py --timeout-seconds 5 > staging-artifacts/readiness.json || true
