@@ -46,6 +46,7 @@ OpenPayNet is a Visa-inspired distributed payments platform being built as an en
 - GitHub Actions workflow: `.github/workflows/ci-cd.yml`
 - Staging deployment notes: `docs/staging-deployment.md`
 - Railway deployment notes: `docs/railway-deployment.md`
+- Railway pipeline deploy helper: `scripts/deploy_railway.py`
 - Readiness helper: `scripts/wait_for_staging.py`
 - Release gate policy: `docs/release-gates.md`
 - Release gate checker: `scripts/check_release_gate.py`

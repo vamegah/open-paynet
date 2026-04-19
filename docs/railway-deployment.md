@@ -105,3 +105,38 @@ Shared across services:
 - `api-gateway`, `auth-service`, `ledger-service`, and `notification-service` now honor `HOST` and `PORT`.
 - Use Railway PostgreSQL and Redis templates instead of self-hosting them inside the app repo.
 - If you need a public ledger endpoint for testing, you can temporarily expose `ledger-service`, but keeping only `api-gateway` public is cleaner.
+
+## CI Deployment
+
+The GitHub Actions pipeline can now deploy these six app services to Railway after staging promotion succeeds:
+
+- `api-gateway`
+- `auth-service`
+- `payment-service`
+- `fraud-service`
+- `ledger-service`
+- `notification-service`
+
+The pipeline uses `scripts/deploy_railway.py` to generate a per-service `railway.json` for each deployment, then runs `railway up` against the target service. This keeps the repo root as the build context while still selecting the correct non-root Dockerfile for each service.
+
+Required GitHub configuration:
+
+- repository variable `ENABLE_RAILWAY_DEPLOY=true`
+- repository variable `RAILWAY_PROJECT_ID=<your-project-id>`
+- optional repository variable `RAILWAY_ENVIRONMENT_NAME=production`
+- repository secret `RAILWAY_TOKEN=<project-token>`
+
+Required one-time Railway setup:
+
+- create a Railway project with services named exactly:
+  - `api-gateway`
+  - `auth-service`
+  - `payment-service`
+  - `fraud-service`
+  - `ledger-service`
+  - `notification-service`
+- provision Railway PostgreSQL, Redis, and Kafka in the same environment
+- set the runtime variables from the "Key Variables" section above on the appropriate services
+- expose only `api-gateway` publicly for the first pass
+
+If `ENABLE_RAILWAY_DEPLOY` is not set to `true`, the Railway deploy job is skipped and the rest of the CI pipeline behaves exactly as before.
